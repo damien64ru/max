@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Редирект на канал</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            padding: 32px;
+            max-width: 400px;
+            text-align: center;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #2b6ef0;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error {
+            color: #d32f2f;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="spinner"></div>
+    <p>Перенаправление...</p>
+    <div id="errorMessage" class="error" style="display:none;"></div>
+</div>
+
+<script>
+    // ========== АДРЕС ВАШЕГО БОТА НА AMVERA ==========
+    const BOT_SERVER_URL = 'https://maks-damien64ru.amvera.io';   // 👈 Заменять не нужно
+    
+    // Получаем идентификатор кампании из параметра ?startapp=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignId = urlParams.get('startapp');
+    
+    async function redirectToChannel() {
+        if (!campaignId) {
+            showError('Ошибка: ссылка не содержит идентификатор кампании (?startapp=...).');
+            return;
+        }
+        
+        try {
+            // Запрос к боту: получаем пригласительную ссылку для канала
+            const response = await fetch(`${BOT_SERVER_URL}/getLink?campaignId=${campaignId}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Сервер ответил (${response.status}): ${errorText}`);
+            }
+            const data = await response.json();
+            if (data && data.link) {
+                // Мгновенное перенаправление
+                window.location.replace(data.link);
+            } else {
+                throw new Error('Сервер не вернул ссылку для перехода.');
+            }
+        } catch (err) {
+            console.error('Ошибка при получении ссылки:', err);
+            showError('Не удалось получить ссылку для перехода. Проверьте, что бот запущен и сервер доступен.');
+        }
+    }
+    
+    function showError(msg) {
+        document.querySelector('.spinner').style.display = 'none';
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = msg;
+        errorDiv.style.display = 'block';
+    }
+    
+    redirectToChannel();
+</script>
+</body>
+</html>
