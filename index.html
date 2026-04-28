@@ -12,22 +12,42 @@
 </head>
 <body>
     <div class="loader"></div>
-    <div id="message">Проверка ссылки...</div>
+    <div id="message">Загрузка...</div>
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
-        const campaignId = new URLSearchParams(location.search).get('startapp');
+
+        // Функция получения campaignId внутри MAX
+        function getCampaignId() {
+            // 1. Пытаемся через API мини-приложения
+            if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
+                const params = window.MiniApp.getStartParams();
+                if (params && params.startapp) return params.startapp;
+            }
+            // 2. Fallback: читаем из URL (для отладки в браузере)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('startapp')) return urlParams.get('startapp');
+            // 3. Попробуем из hash (редко)
+            if (window.location.hash) {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                if (hashParams.has('startapp')) return hashParams.get('startapp');
+            }
+            return null;
+        }
+
+        const campaignId = getCampaignId();
 
         if (!campaignId) {
-            document.getElementById('message').innerHTML = '<span class="error">Ошибка: отсутствует идентификатор кампании</span>';
+            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
+            console.error('No campaignId found. URL:', window.location.href);
         } else {
+            console.log('CampaignId:', campaignId);
             fetch(`${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`)
                 .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
                     if (data && data.link) {
                         // Автоматический переход
                         window.location.replace(data.link);
-                        // Через 5 секунд покажем сообщение, если редирект не случился
                         setTimeout(() => {
                             document.getElementById('message').innerHTML = `Перенаправление не произошло. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
                             document.querySelector('.loader').style.display = 'none';
