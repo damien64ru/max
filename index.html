@@ -2,35 +2,66 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Перенаправление...</title>
+    <title>Редирект...</title>
+    <!-- Подключаем официальную библиотеку MAX Bridge -->
+    <script src="https://st.max.ru/js/max-web-app.js"></script>
     <style>
-        body { font-family: system-ui; text-align: center; padding: 50px; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2b6ef0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error { color: #d32f2f; }
+        body {
+            font-family: system-ui;
+            text-align: center;
+            padding: 50px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2b6ef0;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #d32f2f;
+        }
     </style>
 </head>
 <body>
     <div class="loader"></div>
-    <div id="message">Загрузка...</div>
+    <div id="message">Перенаправление...</div>
+
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
-
-        // Функция получения campaignId внутри MAX
+        
         function getCampaignId() {
-            // 1. Пытаемся через API мини-приложения
-            if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
-                const params = window.MiniApp.getStartParams();
-                if (params && params.startapp) return params.startapp;
+            // 1. Пытаемся получить параметр через MAX Bridge API (основной способ)
+            if (window.WebApp && window.WebApp.initDataUnsafe) {
+                const data = window.WebApp.initDataUnsafe;
+                console.log("initDataUnsafe:", data);
+                if (data && data.start_param) {
+                    console.log("start_param получен через WebApp API:", data.start_param);
+                    return data.start_param;
+                }
             }
-            // 2. Fallback: читаем из URL (для отладки в браузере)
+            
+            // 2. Альтернативный способ: проверить GET-параметр tgWebAppStartParam
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('startapp')) return urlParams.get('startapp');
-            // 3. Попробуем из hash (редко)
-            if (window.location.hash) {
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                if (hashParams.has('startapp')) return hashParams.get('startapp');
+            if (urlParams.has('tgWebAppStartParam')) {
+                const param = urlParams.get('tgWebAppStartParam');
+                console.log("start_param получен через GET-параметр:", param);
+                return param;
             }
+            
+            // 3. Проверить прямой параметр startapp (для отладки в обычном браузере)
+            if (urlParams.has('startapp')) {
+                const param = urlParams.get('startapp');
+                console.log("startapp получен через GET-параметр:", param);
+                return param;
+            }
+            
             return null;
         }
 
@@ -40,12 +71,16 @@
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
             console.error('No campaignId found. URL:', window.location.href);
+            if (window.WebApp) {
+                console.error('WebApp.initDataUnsafe:', window.WebApp.initDataUnsafe);
+            }
         } else {
             console.log('CampaignId:', campaignId);
             fetch(`${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`)
                 .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
                     if (data && data.link) {
+                        console.log("Получена ссылка для редиректа:", data.link);
                         // Автоматический переход
                         window.location.replace(data.link);
                         setTimeout(() => {
