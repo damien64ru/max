@@ -17,32 +17,30 @@
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
-        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-        // Извлекаем campaignId из правильного поля start_param
+        // --- Получаем campaignId ---
         let campaignId = null;
-        if (window.WebApp && window.WebApp.initDataUnsafe) {
+        // 1. Пробуем через WebApp API (работает внутри MAX)
+        if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.start_param) {
             campaignId = window.WebApp.initDataUnsafe.start_param;
-            console.log('Извлеченный campaignId из start_param:', campaignId);
+            console.log('WebApp.start_param:', campaignId);
         }
-        
-        // Резервный способ: проверяем URL на случай отладки в браузере
+        // 2. Если нет — читаем из URL (для браузера или fallback)
         if (!campaignId) {
             const urlParams = new URLSearchParams(window.location.search);
             campaignId = urlParams.get('startapp');
-            if (campaignId) console.log('Резервный campaignId из URL:', campaignId);
+            console.log('URL startapp:', campaignId);
         }
         
-        // Извлекаем userId (без изменений)
+        // --- Получаем userId (если есть) ---
         let userId = null;
         if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
             userId = window.WebApp.initDataUnsafe.user.id;
-            console.log('Извлеченный userId:', userId);
+            console.log('userId:', userId);
         }
         
         if (!campaignId) {
-            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден. Проверьте формат ссылки.</span>';
+            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
-            console.error('Не удалось найти campaignId в initDataUnsafe.start_param');
         } else {
             let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
             if (userId) url += `&userId=${userId}`;
@@ -52,20 +50,21 @@
                 .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
                 .then(data => {
                     if (data && data.link) {
-                        console.log('Перенаправление на:', data.link);
+                        // Перенаправляем
                         window.location.replace(data.link);
+                        // fallback через 5 секунд
                         setTimeout(() => {
                             document.getElementById('message').innerHTML = `Не удалось перенаправить автоматически. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
                             document.querySelector('.loader').style.display = 'none';
                         }, 5000);
                     } else {
-                        throw new Error('Ссылка не получена от бота');
+                        throw new Error('Ссылка не получена');
                     }
                 })
                 .catch(err => {
                     document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
                     document.querySelector('.loader').style.display = 'none';
-                    console.error('Ошибка запроса к боту:', err);
+                    console.error(err);
                 });
         }
     </script>
