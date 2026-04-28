@@ -17,53 +17,55 @@
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
-        // Получение campaignId
-        function getCampaignId() {
-            if (window.WebApp?.initDataUnsafe?.start_param) 
-                return window.WebApp.initDataUnsafe.start_param;
+        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        // Извлекаем campaignId из правильного поля start_param
+        let campaignId = null;
+        if (window.WebApp && window.WebApp.initDataUnsafe) {
+            campaignId = window.WebApp.initDataUnsafe.start_param;
+            console.log('Извлеченный campaignId из start_param:', campaignId);
+        }
+        
+        // Резервный способ: проверяем URL на случай отладки в браузере
+        if (!campaignId) {
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('tgWebAppStartParam')) 
-                return urlParams.get('tgWebAppStartParam');
-            if (urlParams.has('startapp')) 
-                return urlParams.get('startapp');
-            return null;
+            campaignId = urlParams.get('startapp');
+            if (campaignId) console.log('Резервный campaignId из URL:', campaignId);
         }
         
-        // Получение userId
-        function getUserId() {
-            if (window.WebApp?.initDataUnsafe?.user?.id) 
-                return window.WebApp.initDataUnsafe.user.id;
-            return null;
+        // Извлекаем userId (без изменений)
+        let userId = null;
+        if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
+            userId = window.WebApp.initDataUnsafe.user.id;
+            console.log('Извлеченный userId:', userId);
         }
-        
-        const campaignId = getCampaignId();
-        const userId = getUserId();
         
         if (!campaignId) {
-            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
+            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден. Проверьте формат ссылки.</span>';
             document.querySelector('.loader').style.display = 'none';
+            console.error('Не удалось найти campaignId в initDataUnsafe.start_param');
         } else {
             let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
             if (userId) url += `&userId=${userId}`;
-            console.log('Request URL:', url);
+            console.log('Запрос к боту:', url);
             
             fetch(url)
                 .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
                 .then(data => {
-                    if (data?.link) {
+                    if (data && data.link) {
+                        console.log('Перенаправление на:', data.link);
                         window.location.replace(data.link);
                         setTimeout(() => {
-                            document.getElementById('message').innerHTML = `Не удалось перенаправить. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
+                            document.getElementById('message').innerHTML = `Не удалось перенаправить автоматически. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
                             document.querySelector('.loader').style.display = 'none';
                         }, 5000);
                     } else {
-                        throw new Error('Нет ссылки в ответе');
+                        throw new Error('Ссылка не получена от бота');
                     }
                 })
                 .catch(err => {
                     document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
                     document.querySelector('.loader').style.display = 'none';
-                    console.error(err);
+                    console.error('Ошибка запроса к боту:', err);
                 });
         }
     </script>
