@@ -2,59 +2,104 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Перенаправление...</title>
+    <title>Редирект...</title>
+    <!-- Подключаем официальную библиотеку MAX Bridge -->
     <script src="https://st.max.ru/js/max-web-app.js"></script>
     <style>
-        body { font-family: system-ui; text-align: center; padding: 50px; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2b6ef0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error { color: #d32f2f; }
+        body {
+            font-family: system-ui;
+            text-align: center;
+            padding: 50px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2b6ef0;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #d32f2f;
+        }
     </style>
 </head>
 <body>
     <div class="loader"></div>
     <div id="message">Перенаправление...</div>
+
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
-        // --- Получаем campaignId ---
-        let campaignId = null;
-        // 1. Пробуем через WebApp API (работает внутри MAX)
-        if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.start_param) {
-            campaignId = window.WebApp.initDataUnsafe.start_param;
-            console.log('WebApp.start_param:', campaignId);
-        }
-        // 2. Если нет — читаем из URL (для браузера или fallback)
-        if (!campaignId) {
+        function getCampaignId() {
+            // 1. Пытаемся получить параметр через MAX Bridge API (основной способ)
+            if (window.WebApp && window.WebApp.initDataUnsafe) {
+                const data = window.WebApp.initDataUnsafe;
+                console.log("initDataUnsafe:", data);
+                if (data && data.start_param) {
+                    console.log("start_param получен через WebApp API:", data.start_param);
+                    return data.start_param;
+                }
+            }
+            
+            // 2. Альтернативный способ: проверить GET-параметр tgWebAppStartParam
             const urlParams = new URLSearchParams(window.location.search);
-            campaignId = urlParams.get('startapp');
-            console.log('URL startapp:', campaignId);
+            if (urlParams.has('tgWebAppStartParam')) {
+                const param = urlParams.get('tgWebAppStartParam');
+                console.log("start_param получен через GET-параметр:", param);
+                return param;
+            }
+            
+            // 3. Проверить прямой параметр startapp (для отладки в обычном браузере)
+            if (urlParams.has('startapp')) {
+                const param = urlParams.get('startapp');
+                console.log("startapp получен через GET-параметр:", param);
+                return param;
+            }
+            
+            return null;
         }
-        
-        // --- Получаем userId (если есть) ---
-        let userId = null;
-        if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
-            userId = window.WebApp.initDataUnsafe.user.id;
-            console.log('userId:', userId);
+
+        function getUserId() {
+            if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
+                const userId = window.WebApp.initDataUnsafe.user.id;
+                console.log("userId получен:", userId);
+                return userId;
+            }
+            return null;
         }
-        
+
+        const campaignId = getCampaignId();
+        const userId = getUserId();
+
         if (!campaignId) {
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
+            console.error('No campaignId found. URL:', window.location.href);
+            if (window.WebApp) {
+                console.error('WebApp.initDataUnsafe:', window.WebApp.initDataUnsafe);
+            }
         } else {
+            console.log('CampaignId:', campaignId);
             let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
-            if (userId) url += `&userId=${userId}`;
-            console.log('Запрос к боту:', url);
-            
+            if (userId) {
+                url += `&userId=${userId}`;
+                console.log('Передаём userId в запрос');
+            }
             fetch(url)
-                .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
+                .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
                     if (data && data.link) {
-                        // Перенаправляем
+                        console.log("Получена ссылка для редиректа:", data.link);
+                        // Автоматический переход
                         window.location.replace(data.link);
-                        // fallback через 5 секунд
                         setTimeout(() => {
-                            document.getElementById('message').innerHTML = `Не удалось перенаправить автоматически. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
+                            document.getElementById('message').innerHTML = `Перенаправление не произошло. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
                             document.querySelector('.loader').style.display = 'none';
                         }, 5000);
                     } else {
@@ -62,7 +107,7 @@
                     }
                 })
                 .catch(err => {
-                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
+                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message || 'бот не отвечает'}</span>`;
                     document.querySelector('.loader').style.display = 'none';
                     console.error(err);
                 });
