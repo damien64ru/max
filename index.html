@@ -9,27 +9,26 @@
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2b6ef0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .error { color: #d32f2f; }
+        .button { background: #2b6ef0; color: white; text-decoration: none; padding: 12px 24px; border-radius: 12px; display: inline-block; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="loader"></div>
     <div id="message">Загрузка...</div>
+    <div id="error"></div>
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
         function getCampaignId() {
-            // 1. Основной способ через MiniApp API
             if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
                 try {
                     const params = window.MiniApp.getStartParams();
                     if (params && params.startapp) return params.startapp;
                 } catch(e) { console.warn(e); }
             }
-            // 2. Альтернативный способ через WebApp
             if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.start_param) {
                 return window.WebApp.initDataUnsafe.start_param;
             }
-            // 3. Fallback: параметр из URL
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('startapp')) return urlParams.get('startapp');
             if (urlParams.has('tgWebAppStartParam')) return urlParams.get('tgWebAppStartParam');
@@ -61,26 +60,36 @@
             if (userId) url += `&userId=${userId}`;
             console.log('Request URL:', url);
             
-            fetch(url, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return response.json();
-            })
-            .then(data => {
-                if (data && data.link) {
-                    window.location.replace(data.link);
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.timeout = 5000;
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data && data.link) {
+                            window.location.replace(data.link);
+                        } else {
+                            throw new Error('Ссылка не получена');
+                        }
+                    } catch(e) {
+                        document.getElementById('message').innerHTML = '<span class="error">Ошибка: неверный ответ сервера</span>';
+                        document.querySelector('.loader').style.display = 'none';
+                    }
                 } else {
-                    throw new Error('Ссылка не получена');
+                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: HTTP ${xhr.status}</span>`;
+                    document.querySelector('.loader').style.display = 'none';
                 }
-            })
-            .catch(err => {
-                console.error('Fetch error:', err);
-                document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span><br><a href="${BOT_URL}/getLink?campaignId=${campaignId}" target="_blank">Проверить сервер вручную</a>`;
+            };
+            xhr.onerror = function() {
+                document.getElementById('message').innerHTML = '<span class="error">Ошибка соединения с сервером</span>';
                 document.querySelector('.loader').style.display = 'none';
-            });
+            };
+            xhr.ontimeout = function() {
+                document.getElementById('message').innerHTML = '<span class="error">Превышен таймаут запроса</span>';
+                document.querySelector('.loader').style.display = 'none';
+            };
+            xhr.send();
         }
     </script>
 </body>
