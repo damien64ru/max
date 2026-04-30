@@ -16,25 +16,44 @@
     <div id="message">Перенаправление...</div>
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
-        let campaignId = null;
-        if (window.MiniApp && typeof window.MiniApp.getStartParam === 'function') {
-            campaignId = window.MiniApp.getStartParam();
-        }
-        if (!campaignId && window.location.search) {
+        
+        function getStartParam() {
+            // 1. Основной способ через MiniApp API
+            if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
+                try {
+                    const params = window.MiniApp.getStartParams();
+                    if (params && params.startapp) return params.startapp;
+                } catch(e) { console.warn(e); }
+            }
+            // 2. Fallback: параметр из URL (для тестов в браузере)
             const urlParams = new URLSearchParams(window.location.search);
-            campaignId = urlParams.get('startapp');
+            if (urlParams.has('startapp')) return urlParams.get('startapp');
+            if (urlParams.has('tgWebAppStartParam')) return urlParams.get('tgWebAppStartParam');
+            return null;
         }
-        let userId = null;
-        if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
-            const user = window.MiniApp.getUser();
-            if (user && user.id) userId = user.id;
+        
+        function getUserId() {
+            if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
+                try {
+                    const user = window.MiniApp.getUser();
+                    if (user && user.id) return user.id;
+                } catch(e) {}
+            }
+            return null;
         }
+        
+        const campaignId = getStartParam();
+        const userId = getUserId();
+        
         if (!campaignId) {
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
+            console.error('No campaignId');
         } else {
             let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
             if (userId) url += `&userId=${userId}`;
+            console.log('Request URL:', url);
+            
             fetch(url)
                 .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
