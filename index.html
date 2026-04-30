@@ -5,10 +5,10 @@
     <title>Перенаправление...</title>
     <script src="https://st.max.ru/js/max-web-app.js"></script>
     <style>
-        body { font-family: system-ui; text-align: center; padding: 50px; }
+        body { font-family: system-ui; text-align: center; padding: 50px; background: #f0f2f5; }
         .loader { border: 4px solid #e0e0e0; border-top: 4px solid #2b6ef0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error { color: #d32f2f; }
+        .error { color: #d32f2f; margin-top: 16px; }
     </style>
 </head>
 <body>
@@ -18,39 +18,57 @@
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
         function getCampaignId() {
-            // Способ 1: через MiniApp API (основной для MAX)
             if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
                 try {
                     const params = window.MiniApp.getStartParams();
                     if (params && params.startapp) return params.startapp;
-                } catch(e) { console.warn('MiniApp.getStartParams error:', e); }
+                } catch(e) { console.warn(e); }
             }
-            // Способ 2: напрямую из URL (для тестов в браузере)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('startapp')) return urlParams.get('startapp');
-            // Способ 3: старый вариант через WebApp
+            if (urlParams.has('tgWebAppStartParam')) return urlParams.get('tgWebAppStartParam');
             if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.start_param) {
                 return window.WebApp.initDataUnsafe.start_param;
             }
             return null;
         }
-
+        
+        function getUserId() {
+            // Способ 1: через MiniApp API
+            if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
+                try {
+                    const user = window.MiniApp.getUser();
+                    if (user && user.id) return user.id;
+                } catch(e) { console.warn('MiniApp.getUser error:', e); }
+            }
+            // Способ 2: через WebApp (fallback)
+            if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
+                return window.WebApp.initDataUnsafe.user.id;
+            }
+            return null;
+        }
+        
         const campaignId = getCampaignId();
-        console.log('Извлечённый campaignId:', campaignId);
-
+        const userId = getUserId();
+        
         if (!campaignId) {
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
-            console.error('No campaignId found');
+            console.error('No campaignId');
         } else {
-            const url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
-            console.log('Запрос к боту:', url);
+            let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
+            if (userId) {
+                url += `&userId=${userId}`;
+                console.log(`Передаю userId: ${userId}`);
+            } else {
+                console.warn('UserId не получен, переход не будет отслежен');
+            }
+            console.log('Request URL:', url);
             
-            fetch(url)
+            fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
                 .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
                     if (data && data.link) {
-                        console.log('Перенаправление на:', data.link);
                         window.location.replace(data.link);
                         setTimeout(() => {
                             document.getElementById('message').innerHTML = `Не удалось перенаправить. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
@@ -61,7 +79,7 @@
                     }
                 })
                 .catch(err => {
-                    console.error('Ошибка:', err);
+                    console.error('Fetch error:', err);
                     document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
                     document.querySelector('.loader').style.display = 'none';
                 });
