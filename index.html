@@ -2,16 +2,18 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Редирект...</title>
+    <title>Перенаправление...</title>
+    <!-- ВАЖНО: подключаем библиотеку MAX -->
     <script src="https://st.max.ru/js/max-web-app.js"></script>
     <style>
         body {
             font-family: system-ui;
             text-align: center;
             padding: 50px;
+            background: #f0f2f5;
         }
         .loader {
-            border: 4px solid #f3f3f3;
+            border: 4px solid #e0e0e0;
             border-top: 4px solid #2b6ef0;
             border-radius: 50%;
             width: 40px;
@@ -25,6 +27,7 @@
         }
         .error {
             color: #d32f2f;
+            margin-top: 16px;
         }
     </style>
 </head>
@@ -33,77 +36,58 @@
     <div id="message">Перенаправление...</div>
 
     <script>
+        // ==== НАСТРОЙКИ ====
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
-        function getCampaignId() {
-            if (window.WebApp && window.WebApp.initDataUnsafe) {
-                const data = window.WebApp.initDataUnsafe;
-                console.log("initDataUnsafe:", data);
-                if (data && data.start_param) {
-                    console.log("start_param получен через WebApp API:", data.start_param);
-                    return data.start_param;
-                }
-            }
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('tgWebAppStartParam')) {
-                const param = urlParams.get('tgWebAppStartParam');
-                console.log("start_param получен через GET-параметр:", param);
-                return param;
-            }
-            if (urlParams.has('startapp')) {
-                const param = urlParams.get('startapp');
-                console.log("startapp получен через GET-параметр:", param);
-                return param;
-            }
-            return null;
+        // ==== ПОЛУЧАЕМ ID КАМПАНИИ ====
+        let campaignId = null;
+        
+        // Пытаемся получить параметр из разных мест
+        if (window.MiniApp && typeof window.MiniApp.getStartParam === 'function') {
+            campaignId = window.MiniApp.getStartParam();
         }
-
-        const campaignId = getCampaignId();
-
+        
+        if (!campaignId && window.location.search) {
+            const urlParams = new URLSearchParams(window.location.search);
+            campaignId = urlParams.get('startapp');
+        }
+        
+        // ==== ПОЛУЧАЕМ ID ПОЛЬЗОВАТЕЛЯ ====
+        let userId = null;
+        if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
+            const user = window.MiniApp.getUser();
+            if (user && user.id) userId = user.id;
+        }
+        
+        // ==== ЕСЛИ ID КАМПАНИИ НЕ НАЙДЕН ====
         if (!campaignId) {
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
-            console.error('No campaignId found. URL:', window.location.href);
-        } else {
-            console.log('CampaignId:', campaignId);
-            const url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
+            console.error('No campaignId found.');
+        } 
+        // ==== ЕСЛИ ВСЕ ХОРОШО, ДЕЛАЕМ ЗАПРОС ====
+        else {
+            let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
+            if (userId) url += `&userId=${userId}`;
             
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.timeout = 5000;
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data && data.link) {
-                            console.log("Получена ссылка для редиректа:", data.link);
-                            window.location.replace(data.link);
-                            setTimeout(() => {
-                                document.getElementById('message').innerHTML = `Перенаправление не произошло. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
-                                document.querySelector('.loader').style.display = 'none';
-                            }, 5000);
-                        } else {
-                            throw new Error('Ссылка не получена');
-                        }
-                    } catch(e) {
-                        document.getElementById('message').innerHTML = '<span class="error">Ошибка: неверный ответ сервера</span>';
-                        document.querySelector('.loader').style.display = 'none';
+            // Используем стандартный Fetch API
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.link) {
+                        window.location.replace(data.link);
+                    } else {
+                        throw new Error('No link received');
                     }
-                } else {
-                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: HTTP ${xhr.status}</span>`;
+                })
+                .catch(err => {
+                    console.error('Fetch error:', err);
+                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
                     document.querySelector('.loader').style.display = 'none';
-                }
-            };
-            xhr.onerror = function() {
-                document.getElementById('message').innerHTML = '<span class="error">Ошибка соединения с сервером</span>';
-                document.querySelector('.loader').style.display = 'none';
-                console.error('XMLHttpRequest failed');
-            };
-            xhr.ontimeout = function() {
-                document.getElementById('message').innerHTML = '<span class="error">Превышен таймаут запроса</span>';
-                document.querySelector('.loader').style.display = 'none';
-            };
-            xhr.send();
+                });
         }
     </script>
 </body>
