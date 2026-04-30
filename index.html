@@ -17,30 +17,41 @@
     <script>
         const BOT_URL = 'https://maks-damien64ru.amvera.io';
         
-        function getCampaignId() {
+        function getStartParam() {
             if (window.MiniApp && typeof window.MiniApp.getStartParams === 'function') {
                 try {
                     const params = window.MiniApp.getStartParams();
                     if (params && params.startapp) return params.startapp;
-                } catch(e) {}
-            }
-            if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.start_param) {
-                return window.WebApp.initDataUnsafe.start_param;
+                } catch(e) { console.warn(e); }
             }
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('startapp')) return urlParams.get('startapp');
-            if (urlParams.has('tgWebAppStartParam')) return urlParams.get('tgWebAppStartParam');
             return null;
         }
         
-        const campaignId = getCampaignId();
+        function getUserId() {
+            if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
+                try {
+                    const user = window.MiniApp.getUser();
+                    if (user && user.id) return user.id;
+                } catch(e) { console.warn(e); }
+            }
+            return null;
+        }
+        
+        const campaignId = getStartParam();
+        const userId = getUserId();
         
         if (!campaignId) {
             document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
             document.querySelector('.loader').style.display = 'none';
             console.error('No campaignId');
         } else {
-            fetch(`${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`)
+            let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
+            if (userId) url += `&userId=${userId}`;
+            console.log('Request URL:', url);
+            
+            fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
                 .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
                 .then(data => {
                     if (data && data.link) {
@@ -54,9 +65,9 @@
                     }
                 })
                 .catch(err => {
+                    console.error('Fetch error:', err);
                     document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
                     document.querySelector('.loader').style.display = 'none';
-                    console.error(err);
                 });
         }
     </script>
