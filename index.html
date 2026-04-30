@@ -33,57 +33,67 @@
             return null;
         }
         
-        function getUserId() {
-            // Способ 1: через MiniApp API
+        async function getUserId() {
+            // Способ 1: через MiniApp API (асинхронно)
             if (window.MiniApp && typeof window.MiniApp.getUser === 'function') {
                 try {
-                    const user = window.MiniApp.getUser();
-                    if (user && user.id) return user.id;
+                    const user = await window.MiniApp.getUser();
+                    if (user && user.id) {
+                        console.log('userId получен через MiniApp:', user.id);
+                        return user.id;
+                    }
                 } catch(e) { console.warn('MiniApp.getUser error:', e); }
             }
-            // Способ 2: через WebApp (fallback)
+            // Способ 2: через WebApp (синхронно)
             if (window.WebApp && window.WebApp.initDataUnsafe && window.WebApp.initDataUnsafe.user) {
-                return window.WebApp.initDataUnsafe.user.id;
+                const id = window.WebApp.initDataUnsafe.user.id;
+                console.log('userId получен через WebApp:', id);
+                return id;
             }
+            console.warn('Не удалось получить userId');
             return null;
         }
         
-        const campaignId = getCampaignId();
-        const userId = getUserId();
-        
-        if (!campaignId) {
-            document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
-            document.querySelector('.loader').style.display = 'none';
-            console.error('No campaignId');
-        } else {
+        (async function() {
+            const campaignId = getCampaignId();
+            const userId = await getUserId();
+            
+            if (!campaignId) {
+                document.getElementById('message').innerHTML = '<span class="error">Ошибка: идентификатор кампании не найден</span>';
+                document.querySelector('.loader').style.display = 'none';
+                console.error('No campaignId');
+                return;
+            }
+            
             let url = `${BOT_URL}/getLink?campaignId=${encodeURIComponent(campaignId)}`;
             if (userId) {
                 url += `&userId=${userId}`;
                 console.log(`Передаю userId: ${userId}`);
             } else {
-                console.warn('UserId не получен, переход не будет отслежен');
+                console.warn('UserId не получен, клик не будет связан с кампанией');
             }
             console.log('Request URL:', url);
             
-            fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
-                .then(response => response.ok ? response.json() : Promise.reject('HTTP ' + response.status))
-                .then(data => {
-                    if (data && data.link) {
-                        window.location.replace(data.link);
-                        setTimeout(() => {
-                            document.getElementById('message').innerHTML = `Не удалось перенаправить. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
-                            document.querySelector('.loader').style.display = 'none';
-                        }, 5000);
-                    } else {
-                        throw new Error('Ссылка не получена');
-                    }
-                })
-                .catch(err => {
-                    console.error('Fetch error:', err);
-                    document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
-                    document.querySelector('.loader').style.display = 'none';
-                });
-        }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (data && data.link) {
+                    console.log('Перенаправление на:', data.link);
+                    window.location.replace(data.link);
+                    setTimeout(() => {
+                        document.getElementById('message').innerHTML = `Не удалось перенаправить. <a href="${data.link}" target="_top">Открыть канал вручную</a>`;
+                        document.querySelector('.loader').style.display = 'none';
+                    }, 5000);
+                } else {
+                    throw new Error('Ссылка не получена');
+                }
+            } catch (err) {
+                console.error('Ошибка:', err);
+                document.getElementById('message').innerHTML = `<span class="error">Ошибка: ${err.message}</span>`;
+                document.querySelector('.loader').style.display = 'none';
+            }
+        })();
     </script>
 </body>
 </html>
